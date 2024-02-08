@@ -1,5 +1,5 @@
-# JabaProject <img
-  src="(https://www.dl.dropboxusercontent.com/scl/fi/zsky7vq3gvbua3pgp09vu/logo.png?rlkey=q2zrwm6e6n7f06zvj55qctb02&dl=0)"
+# JabaProject 
+  <img src="(https://www.dl.dropboxusercontent.com/scl/fi/zsky7vq3gvbua3pgp09vu/logo.png?rlkey=q2zrwm6e6n7f06zvj55qctb02&dl=0)"
   alt="Alt text"
   title="Optional title"
   style="display: inline-block; margin: 0 auto; max-width: 300px">
