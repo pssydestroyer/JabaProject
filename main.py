@@ -11,7 +11,7 @@ steps = {} # условні кроки по яким проходимся ( кр
 def handle_start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     button_menu = types.KeyboardButton('Генерація статті')
-    generate_settings = types.KeyboardButton('Налаштування генерації', callback_data = 'generate_settings')
+    generate_settings = types.KeyboardButton('Налаштування генерації') # callback потом буде
     markup.add(button_menu, generate_settings)
     bot.send_message(message.chat.id, "Привіт, я Jaba Project. За допомогою мене ти можеш згенерувати статтю на будь-яку тему!", reply_markup=markup)
 
