@@ -149,3 +149,5 @@ def generate_settings(call):
 
 if __name__ == '__main__':
     bot.infinity_polling(skip_pending=True)
+
+#кстаті з др мене,залишу тут, хай буде
