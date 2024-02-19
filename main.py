@@ -141,7 +141,7 @@ def send_to_chatgpt(story_text, chat_id): #саме цікаве і одна з 
         "model": "gpt-3.5-turbo-16k", #я думаю тут понятно, модель гпт (тепер найновіша стоїть модель + макс токенів)
         "messages": [
             {"role": "system", "content": "Ви користувач, який просить створити  зрозумілу та цікаву статтю на українській мові."},
-            {"role": "user", "content": f"Зроби будь ласка статтю українською мовою на тему: {story_text}"}        
+            {"role": "user", "content": f"Створи, будь ласка, детальну та захоплюючу статтю українською мовою на тему: {story_text}. Включи історичні факти, цікаві інциденти та ключові особистості, які пов'язані з цією темою. Додай аналіз сучасного впливу теми та можливі прогнози на майбутнє."} # береться тема яку ввів користувач в тг, відправляється запрос,з темою
         ],
         "temperature": 0.1, # хз, чим більший параметр тим креативніший гпт
         "max_tokens": 16043 # чим більше токенів тим крутіше (слів більше буде)
@@ -164,7 +164,7 @@ def createArticleTelegraph(chat_id):
     content = user_inform[chat_id]['GPT Response']
     response = telegraph.create_page(
         title,
-        html_content=f"<p>{content}</p>",
+        html_content = ''.join(f"<p>{paragraph}</p>" for paragraph in content.split('\n') if paragraph), # розділення на абзаци, тепер стаття виглядає набагато акуратніше
         author_name=author_name
     )
     return response['url']
