@@ -1,22 +1,37 @@
 import telebot
 from telebot import types
 import requests
+from telegraph import Telegraph
+from config import TG_token, TELEGRAPH_token, GPT_api
 
-
-TOKEN = ''  # Думаю зробити щоб токен зберігався файлом, в коді якось не кайф
-bot = telebot.TeleBot(TOKEN)
- 
+bot = telebot.TeleBot(TG_token)
+telegraph = Telegraph(TELEGRAPH_token) #access token телеграфа, можна получити перейшовши по ссилці
 user_inform = {} # словник, данні які вводить користувач попадають в нього
 steps = {} # условні кроки по яким проходимся ( крок 1 - заголовок, після того як користувач вказав заголовок переключаємось на крок 2, це - імя юзера - і крок 3 - тема , по якій гпт буде генерувати статтю.) 
+
+
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     button_menu = types.KeyboardButton('Генерація статті')
-    generate_settings = types.KeyboardButton('Налаштування генерації')
-    markup.add(button_menu, generate_settings)
+    faq_button = types.KeyboardButton('FAQ та проблеми')
+    markup.add(button_menu, faq_button)
     bot.send_message(message.chat.id, "Привіт, я Jaba Project. За допомогою мене ти можеш згенерувати статтю на будь-яку тему!", reply_markup=markup)
 
+
+@bot.message_handler(func=lambda message: message.text == "FAQ та проблеми")
+def faq_info(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, """
+Модель GPT, яка використовується для генерації: GPT 3.5 Turbo (16k tokens).
+
+Так як це не GPT-4, який має доступ до інтернету, то бот може якусь херню в статтях. Якщо ви не використовуєте GPT-4, то краще не юзати  сленгу, запитань про актуальні новини після 2021 року. Є велика ймовірність, що GPT напише якусь гадость..
+----------------------------------------------------------------------------------
+Швидкість генерації статті залежить від декількох факторів:
+1. Тема статті.
+2.Кількість токенів які вказані в функції send_gpt. Чим більше токенів, тим більше буде текст статт'ї, тим більше треба гпт думати і генереувати тексту.
+""")
 
 # Ще не знаю як можна зібрати та зберегти інформацію кращим способом, так що буде поки що так.
 # Ця функція базова, потім пізніше розберусь як її можна зробити кращим способом і перероблю її.
@@ -33,7 +48,7 @@ def collect_user_info(message):
         steps[chat_id] = 2
     elif steps.get(chat_id) == 2:
         user_inform[chat_id]['Your name'] = message.text
-        bot.send_message(chat_id, "Залишилось відправити тему для статті")
+        bot.send_message(chat_id, "Залишилось відправити тему для статті. Чим краще буде розписана тему статті - тим краще буде згенерована стаття.")
         steps[chat_id] = 3
     elif steps.get(chat_id) == 3 and 'Your story' not in user_inform[chat_id]: # додав перевірку, був баг, коли бот зібрав данні і відправив їх користувачу, можна було написати любий текст і бот перезаписував кожен раз словник
         user_inform[chat_id]['Your story'] = message.text
@@ -51,8 +66,8 @@ def show_info(message): # добавлена функція виводу тек�
     inline.add(yes_button, no_button)
 
     bot.send_message(chat_id, info_text) # відправлення інформації, яку ввів користувач 
-    bot.send_message(chat_id, "Бажаєте редагувати інформацію?", reply_markup=inline) # відправлення повідомлення разом з кнопками
-
+    redact_message = bot.send_message(chat_id, "Бажаєте редагувати інформацію?", reply_markup=inline) # відправлення повідомлення разом з кнопками
+    message_id = redact_message
 
 @bot.callback_query_handler(func=lambda call: call.data == 'yes')
 def handle_edit_choice(call): #функція для обробки вибору користувача(редагувати текст який він відправив чи ні)
@@ -93,61 +108,66 @@ def handle_new_information(message, inform, chat_id): # зробив логік�
     
     if 'Your story' in user_inform[chat_id]:
         story_text = user_inform[chat_id]['Your story']
-        response_text = send_to_chatgpt(story_text)
-        bot.send_message(chat_id, response_text)
+        response_text = send_to_chatgpt(story_text,chat_id)
         print(f"відправка в гпт: {story_text}") 
-
+    article_url = createArticleTelegraph(chat_id)
+    bot.send_message(chat_id, f"Ваша стаття успішно створена: {article_url}")
+    print(f"url: {article_url}") 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'no') # випадок якщо користувач не хоче редагувати данні.
 def handle_no_edit_choice(call):
     chat_id = call.message.chat.id
     bot.answer_callback_query(call.id)
-    bot.send_message(chat_id, "Чотко. Відправляємо данні в потрібне місце та генеруємо статтю. Це може зайняти деякий час(приблизно 20-30секунд).")
+    bot.edit_message_text(text="Чотко. Відправляємо данні в потрібне місце та генеруємо статтю. Це може зайняти деякий час (приблизно 20-30 секунд).", chat_id=chat_id, message_id=call.message.message_id)    
     if 'Your story' in user_inform[chat_id]:
         story_text = user_inform[chat_id]['Your story']
         print(f"відправка в гпт: {story_text}") 
-        response_text = send_to_chatgpt(story_text)
-        bot.send_message(chat_id, response_text)
+        response_text = send_to_chatgpt(story_text,chat_id)
+    article_url = createArticleTelegraph(chat_id)
+    bot.edit_message_text(text=f"Ваша стаття успішно створена: {article_url}",chat_id=chat_id, message_id=call.message.message_id )
+    bot.send_message(chat_id , "Бажаєте створити ще якусь статтю?")
+    print(f"url: {article_url}") 
 
-def send_to_chatgpt(story_text): #саме цікаве і одна з глобальних функцій, через апіху openai відправляємо запрос на створення статті
+
+
+
+def send_to_chatgpt(story_text, chat_id): #саме цікаве і одна з глобальних функцій, через апіху openai відправляємо запрос на створення статті
     api_url = "https://api.openai.com/v1/chat/completions"
     headers = { #звичайні заголовки для авторизації
-        "Authorization": f"Bearer апі гптхи", 
+        "Authorization": f"Bearer {GPT_api}", 
         "Content-Type": "application/json"
     } 
     payload = {
-        "model": "gpt-3.5-turbo", #я думаю тут понятно, модель гпт (вроді стоїть сама найновіша, ну потом подивлюсь)
+        "model": "gpt-3.5-turbo-16k", #я думаю тут понятно, модель гпт (тепер найновіша стоїть модель + макс токенів)
         "messages": [
             {"role": "system", "content": "Ви користувач, який просить створити  зрозумілу та цікаву статтю на українській мові."},
-            {"role": "user", "content": f"Зроби будь ласка статтю українською мовою на тему: {story_text}"} # береться тема яку ввів користувач в тг, відправляється запрос,з темою
+            {"role": "user", "content": f"{story_text}"} # береться тема яку ввів користувач в тг, відправляється запрос,з темою
         ],
-        "temperature": 1, # хз, чим більший параметр тим креативніший гпт
-        "max_tokens": 3024 # чим більше токенів тим крутіше (слів більше буде)
+        "temperature": 0.1, # хз, чим більший параметр тим креативніший гпт
+        "max_tokens": 16043 # чим більше токенів тим крутіше (слів більше буде)
     }
     response = requests.post(api_url, json=payload, headers=headers)
     if response.status_code == 200:
         data = response.json()
         try:
             response_text = data["choices"][0].get("message", {}).get("content", "")
+            user_inform[chat_id]['GPT Response'] = response_text # сохраняємо відповідь в словнику
         except (IndexError, KeyError) as e:
             print(f"Error accessing response data: {e}")
             response_text = "Не вдалося обробити відповідь."
         return response_text
 
 
-"""@bot.callback_query_handler(func=lambda call: call.data == 'gen_settings') #реалізація під питанням
-def generate_settings(call):
-    chat_id = call.message.chat.id
-    inline_keyboard = types.InlineKeyboardMarkup()
-    max_tokens = types.InlineKeyboardButton("Змінити кількість токенів моделі (впливає на довжину тексту)")
-    temperature = types.InlineKeyboardButton("Змінює творчіть бота (чим більший параметр тим творчий текст буде генерувати Chat GPT)")
-    inline_keyboard.add(max_tokens, temperature)
-    bot.send_message(chat_id, "Виберіть налаштування які вас цікавлять:", inline_keyboard)
-"""
-
-
+def createArticleTelegraph(chat_id):
+    title = user_inform[chat_id]['Your title']
+    author_name = user_inform[chat_id]['Your name']
+    content = user_inform[chat_id]['GPT Response']
+    response = telegraph.create_page(
+        title,
+        html_content=f"<p>{content}</p>",
+        author_name=author_name
+    )
+    return response['url']
 
 if __name__ == '__main__':
     bot.infinity_polling(skip_pending=True)
-
-#кстаті з др мене,залишу тут, хай буде
